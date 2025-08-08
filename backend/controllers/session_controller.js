@@ -9,7 +9,7 @@ export const getAllSessions = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
-/*
+
 // 2. Create a new session (e.g., on login)
 export const createSession = async (req, res) => {
   try {
@@ -58,4 +58,4 @@ export const deleteAllUserSessions = async (req, res) => {
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
-};*/
+};
