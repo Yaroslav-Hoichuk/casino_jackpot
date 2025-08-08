@@ -12,7 +12,7 @@ const userScheme = new mongoose.Schema(
       required: true,
       unique: true
     },
-    password: {
+    passwordHash: {
       type: String,
       required: true
     },
@@ -26,6 +26,7 @@ const userScheme = new mongoose.Schema(
   }
 );
 
+//hashing password
 userScheme.pre("save", async function (next) {
   if (!this.isModified("password")) return next();
  
