@@ -1,7 +1,7 @@
 import express from "express"; 
 import { registerValidation } from "./validators/auth_validation.js"
 import { Cashout, getUserById, getUsers, Spin, userLogin, userRegistration } from "./controllers/user_controller.js";
-import { getAllSessions, getUserSessionsById, createSession, deleteSessionById, deleteAllUserSessions} from "./controllers/session_controller.js";
+import { getAllSessions, createSession, deleteSessionById, deleteAllUserSessions} from "./controllers/session_controller.js";
 import dotenv from 'dotenv';
 import { dbConnection } from "./connections/dbConnection.js";
 import cors from "cors";
@@ -21,7 +21,6 @@ app.use(express.json());
 
 app.get("/api/users/", getUsers);
 app.get("/api/users/:id", getUserById)
-app.get("/api/sessions/user/:id", getUserSessionsById)
 app.get("/", getAllSessions);
 
 app.post("/api/auth/registration", registerValidation, userRegistration)

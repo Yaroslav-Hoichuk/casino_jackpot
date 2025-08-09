@@ -35,7 +35,7 @@ export const userRegistration = async (req, res) => {
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
         console.log(errors)
-        return res.status(400).json(errors.array());
+        return res.status(400).json(errors.array());z
       }
       const existingUser = await userScheme.findOne({ email: req.body.email });
       if (existingUser) {
@@ -74,6 +74,7 @@ export const userRegistration = async (req, res) => {
 }
 
 export const userLogin = async (req,res)=>{
+     
      try {
       const user = await userScheme.findOne({ email: req.body.email });
   
@@ -95,7 +96,7 @@ export const userLogin = async (req,res)=>{
       const token = jwt.sign(
         { userId: user._id },
         process.env.JWT_SECRET, 
-        { expiresIn: '1d' } 
+        { expiresIn: '1h' } 
       );
       
       const {passwordHash, ...userData} = user._doc
@@ -104,12 +105,11 @@ export const userLogin = async (req,res)=>{
       res.cookie("token", token, {
       httpOnly: true,
       secure: false,
-      sameSite: "strict",
-      maxAge: 24 * 60 * 60 * 1000
+      sameSite: "lax",
+      maxAge: 20 * 60 * 1000
     });
 
       res.json({
-        ...userData,
         token,
         
       });
@@ -141,19 +141,22 @@ export const Cashout = async (req, res) => {
 
 export const Spin = async (req, res) => {
   try {
-    const token = req.cookies?.token;
+    const token = req.cookies.token;
+    console.log('Cookies: ', req.cookies)
+    
     if (!token) {
       return res.status(401).json({ message: "Not authenticated" });
     }
-
     let decoded;
     try {
       decoded = jwt.verify(token, process.env.JWT_SECRET);
+      console.log(decoded)
+
     } catch (err) {
       return res.status(401).json({ message: "Invalid token" });
     }
 
-    const userId = decoded._id;
+    const userId = decoded.userId; 
 
     const user = await userScheme.findById(userId);
     if (!user) {
@@ -163,10 +166,11 @@ export const Spin = async (req, res) => {
     if (user.creditScore <= 0) {
       return res.status(400).json({ message: "Not enough credits" });
     }
-
-    let result = spinOnce();
+    let result = await spinOnce(user);
+    console.log(result)
+    
     let win = isWin(result);
-    let payout = win ? getPayout(result[0]) : -1;
+    let payout = win ? getPayout(result[0]): 0;
 
     const creditsBeforeSpin = user.creditScore;
     if (win && creditsBeforeSpin >= 40) {
@@ -181,11 +185,8 @@ export const Spin = async (req, res) => {
       }
     }
 
-    // 6. Оновлюємо баланс
     user.creditScore += payout;
-    await user.save();
 
-    // 7. Відповідь клієнту
     return res.status(200).json({
       result,
       win,
@@ -201,7 +202,9 @@ export const Spin = async (req, res) => {
 const SYMBOLS = ['C', 'L', 'O', 'W'];
 const PAYOUTS = { C: 10, L: 20, O: 30, W: 40 };
 
-function spinOnce() {
+async function spinOnce(user) {
+  user.creditScore -= 1;
+  await user.save();
   return [
     SYMBOLS[Math.floor(Math.random() * SYMBOLS.length)],
     SYMBOLS[Math.floor(Math.random() * SYMBOLS.length)],
