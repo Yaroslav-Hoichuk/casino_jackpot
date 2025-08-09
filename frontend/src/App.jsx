@@ -1,199 +1,148 @@
 import { useState } from "react";
+import AuthForm from "./AuthForm.jsx";
+import Game from "./Game.jsx";
 
 const SYMBOLS = ['C', 'L', 'O', 'W'];
 
 function App() {
   const [user, setUser] = useState(null);
-
   const [email, setEmail] = useState("");
-  const [passwordHash, setPassword] = useState(""); // просто password, без hash на фронті
+  const [passwordHash, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-
-  const [isLogin, setIsLogin] = useState(true); // true = логін, false = реєстрація
-
+  const [isLogin, setIsLogin] = useState(true);
   const [symbols, setSymbols] = useState(['X', 'X', 'X']);
   const [spinning, setSpinning] = useState(false);
-  const [score, setScore] = useState(0);
+  const [score, setScore] = useState();
 
   const handleAuth = async (e) => {
-  e.preventDefault();
-  setLoading(true);
+    e.preventDefault();
+    setLoading(true);
+    const url = isLogin
+      ? 'http://localhost:8989/api/auth/login'
+      : 'http://localhost:8989/api/auth/registration';
+    const body = isLogin
+      ? { email, passwordHash }
+      : { email, password: passwordHash };
 
-  const url = isLogin ? 'http://localhost:8989/api/auth/login' : 'http://localhost:8989/api/auth/registration';
-
-  const body = isLogin
-    ? { email, passwordHash } // логін - відправляєш поле passwordHash
-    : { email, password: passwordHash }; // реєстрація - відправляєш поле password
-
-  try {
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify(body),
-    });
-
-    if (!res.ok) throw new Error(isLogin ? 'Login failed' : 'Registration failed');
-
-    const data = await res.json();
-    setUser(data);
-    setScore(data.score || 0);
-    setLoading(false);
-  } catch (err) {
-    alert(err.message);
-    setLoading(false);
-  }
-};
-  const spin = async () => {
-    if (score <= 0) {
-      alert("Not enough credits");
-      return;
-    }
-
-    setSpinning(true);
-
-    let intervals = [];
-
-    for (let i = 0; i < 3; i++) {
-      intervals[i] = setInterval(() => {
-        setSymbols(prev => {
-          const updated = [...prev];
-          updated[i] = SYMBOLS[Math.floor(Math.random() * SYMBOLS.length)];
-          return updated;
-        });
-      }, 100);
-    }
-    /*
     try {
-      const response = await fetch('/api/spin', {
+      const res = await fetch(url, {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
+        body: JSON.stringify(body),
       });
-
-      if (!response.ok) throw new Error('Spin failed');
-
-      const data = await response.json();
-
-      setSymbols(data.symbols);
-      setScore(prev => prev + data.score);
-    } catch (error) {
-      alert('Error during spin: ' + error.message);
+      if (!res.ok) throw new Error(isLogin ? 'Login failed' : 'Registration failed');
+      const data = await res.json();
+      setUser(data);
+      setScore(data.score || 10);
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setLoading(false);
     }
-    */
-
-    setTimeout(() => clearInterval(intervals[0]), 1000);
-    setTimeout(() => clearInterval(intervals[1]), 2000);
-    setTimeout(() => {
-      clearInterval(intervals[2]);
-      setSpinning(false);
-    }, 3000);
   };
 
-  // Кешаут
-  const Cashout = async () => {
+const spin = async () => {
+  if (score <= 0) {
+    alert("Not enough credits");
+    return;
+  }
+
+  setSpinning(true);
+
+  // 1. Запускаємо анімацію випадкових символів
+  let intervals = [];
+  for (let i = 0; i < 3; i++) {
+    intervals[i] = setInterval(() => {
+      setSymbols(prev => {
+        const updated = [...prev];
+        updated[i] = SYMBOLS[Math.floor(Math.random() * SYMBOLS.length)];
+        return updated;
+      });
+    }, 100);
+  }
+
+  // 2. Паралельно запитуємо результат з сервера
+  const response = await fetch('http://localhost:8989/api/users/:id/spin', {
+    method: 'POST',
+    credentials: 'include',
+  });
+  const result = await response.json();
+
+  // 3. Поступово зупиняємо барабани та вставляємо фінальний результат
+  setTimeout(() => {
+    clearInterval(intervals[0]);
+    setSymbols(prev => {
+      const updated = [...prev];
+      updated[0] = result.result[0];
+      return updated;
+    });
+  }, 1000);
+
+  setTimeout(() => {
+    clearInterval(intervals[1]);
+    setSymbols(prev => {
+      const updated = [...prev];
+      updated[1] = result.result[1];
+      return updated;
+    });
+  }, 2000);
+
+  setTimeout(() => {
+    clearInterval(intervals[2]);
+    setSymbols(prev => {
+      const updated = [...prev];
+      updated[2] = result.result[2];
+      return updated;
+    });
+    setSpinning(false);
+    setScore(result.credits); // оновлюємо кредити
+  }, 3000);
+};
+
+
+  const cashout = async () => {
     try {
-      const response = await fetch('http://localhost:8989/api/users/:id/cashout', {
+      const res = await fetch(`http://localhost:8989/api/users/${user._id}/cashout`, {
         method: 'PUT',
         credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({  }),
+        headers: { 'Content-Type': 'application/json' },
       });
-
-      if (!response.ok) throw new Error('Cashout failed');
-
-      const data = await response.json();
-
+      if (!res.ok) throw new Error('Cashout failed');
+      const data = await res.json();
       alert(`You cashed out with ${data.score} credits!`);
       setScore(0);
       setSymbols(['X', 'X', 'X']);
-    } catch (error) {
-      alert('Error during cashout: ' + error.message);
+    } catch (err) {
+      alert(err.message);
     }
   };
-  // (тут твій код spin і Cashout залишається без змін)
 
   if (!user) {
     return (
-      <div className="max-w-sm mx-auto mt-10 p-6 border rounded shadow-md">
-        <h2 className="text-2xl font-bold mb-6 text-center">{isLogin ? "Login" : "Register"}</h2>
-        <form onSubmit={handleAuth}>
-          <label className="block mb-2 font-semibold" htmlFor="email">Email:</label>
-          <input
-            id="email"
-            type="email"
-            value={email}
-            onChange={e => setEmail(e.target.value)}
-            required
-            className="w-full p-2 mb-4 border rounded"
-            placeholder="your@example.com"
-          />
-
-          <label className="block mb-2 font-semibold" htmlFor="password">Password:</label>
-          <input
-            id="password"
-            type="password"
-            value={passwordHash}
-            onChange={e => setPassword(e.target.value)}
-            required
-            className="w-full p-2 mb-6 border rounded"
-            placeholder="********"
-          />
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 disabled:opacity-50"
-          >
-            {loading ? (isLogin ? "Logging in..." : "Registering...") : (isLogin ? "Login" : "Register")}
-          </button>
-        </form>
-
-        <p className="mt-4 text-center">
-          {isLogin ? "Don't have an account?" : "Already have an account?"}{" "}
-          <button
-            className="text-blue-600 underline"
-            onClick={() => setIsLogin(!isLogin)}
-          >
-            {isLogin ? "Register" : "Login"}
-          </button>
-        </p>
-      </div>
+      <AuthForm
+        isLogin={isLogin}
+        setIsLogin={setIsLogin}
+        handleAuth={handleAuth}
+        loading={loading}
+        email={email}
+        setEmail={setEmail}
+        password={passwordHash}
+        setPassword={setPassword}
+      />
     );
   }
 
-  // Якщо залогінений — показати гру
   return (
-    <div className="text-center mt-10 max-w-md mx-auto">
-      <div>
-        <p id="credit-score" className="text-2xl font-semibold">Credits: {score}</p>
-      </div>
-
-      <div className="flex justify-center gap-9 text-6xl font-bold my-6">
-        {symbols.map((symbol, id) => (
-          <div key={id}>{symbol}</div>
-        ))}
-      </div>
-
-      <div className="flex justify-center gap-4">
-        <button
-          className="bg-blue-500 text-white px-6 py-2 rounded hover:bg-blue-600 disabled:bg-gray-400"
-          onClick={spin}
-          disabled={spinning}
-        >
-          Spin
-        </button>
-        <button
-          className="bg-green-500 text-white px-6 py-2 rounded hover:bg-green-600"
-          onClick={Cashout}
-        >
-          Cashout
-        </button>
-      </div>
-    </div>
+    <Game
+      email={email}
+      credits={score}
+      symbols={symbols}
+      spin={spin}
+      spinning={spinning}
+      cashout={cashout}
+    />
   );
 }
 
 export default App;
-
