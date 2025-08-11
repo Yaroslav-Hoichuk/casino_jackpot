@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import AuthForm from "./AuthForm.jsx";
 import Game from "./Game.jsx";
 
@@ -13,6 +13,32 @@ function App() {
   const [symbols, setSymbols] = useState(['X', 'X', 'X']);
   const [spinning, setSpinning] = useState(false);
   const [score, setScore] = useState();
+  const [loadingUser,setLoadingUser] = useState(true)
+
+  useEffect(() => {
+  const checkauth = async () => {
+    try {
+      const res = await fetch("http://localhost:8989/api/auth/me", {
+        credentials: "include"
+      });
+
+      if (!res.ok) {
+        setUser(null);
+        console.log("юз не логінився");
+      } else {
+        const data = await res.json();
+        setUser(data.user);
+        setScore(data.user.creditScore);
+      }
+    } catch (error) {
+      setUser(null);
+    } finally {
+      setLoadingUser(false);
+    }
+  };
+
+  checkauth(); 
+}, []);
 
   const handleAuth = async (e) => {
     e.preventDefault();
@@ -33,8 +59,8 @@ function App() {
       });
       if (!res.ok) throw new Error(isLogin ? 'Login failed' : 'Registration failed');
       const data = await res.json();
-      setUser(data);
-      setScore(data.score || 10);
+      setUser(data.user);
+      setScore(data.user.creditScore);
     } catch (err) {
       alert(err.message);
     } finally {
@@ -68,7 +94,6 @@ const spin = async () => {
     credentials: 'include',
   });
   const result = await response.json();
-
   // 3. Поступово зупиняємо барабани та вставляємо фінальний результат
   setTimeout(() => {
     clearInterval(intervals[0]);
