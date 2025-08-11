@@ -1,7 +1,13 @@
 import userScheme from "../models/user_model.js"
+import sessionSchema from "../models/session_schema.js";
 import { validationResult } from "express-validator";
 import jwt from "jsonwebtoken"
 import bcrypt from "bcrypt"
+import { v4 as uuidv4 } from 'uuid';
+
+
+const SYMBOLS = ['C', 'L', 'O', 'W'];
+const rewardS = { C: 10, L: 20, O: 30, W: 40 };
 
 export const getUsers = async (req,res)=>{
   try {
@@ -73,50 +79,53 @@ export const userRegistration = async (req, res) => {
     }
 }
 
-export const userLogin = async (req,res)=>{
-     
-     try {
-      const user = await userScheme.findOne({ email: req.body.email });
-  
-      if (!user) {
-        return res.status(404).json({
-          message: "Wrong login/password"
-        });
-      }
-  
-     const isValidPass = await bcrypt.compare(req.body.passwordHash, user.passwordHash);
+export const userLogin = async (req, res) => {
+  try {
+    const user = await userScheme.findOne({ email: req.body.email });
+    if (!user) {
+      return res.status(404).json({ message: "Wrong login/password" });
+    }
 
-      if (!isValidPass) {
+    const isValidPass = await bcrypt.compare(req.body.passwordHash, user.passwordHash);
+    if (!isValidPass) {
+      return res.status(403).json({ message: "Wrong login/password" });
+    }
 
-        return res.status(403).json({
-          message: "Wrong login/password"
-        });
-      }
-  
-      const token = jwt.sign(
-        { userId: user._id },
-        process.env.JWT_SECRET, 
-        { expiresIn: '1h' } 
-      );
-      
-      const {passwordHash, ...userData} = user._doc
-      
+    const token = jwt.sign(
+      { userId: user._id },
+      process.env.JWT_SECRET,
+      { expiresIn: '1h' }
+    );
 
-      res.cookie("token", token, {
+    // Створюємо сесію
+    const session = await sessionSchema.create({
+      userId: user._id,
+      credits: user.creditScore,
+      rounds: [],
+    });
+
+    // Встановлюємо куки: токен і sessionId
+    res.cookie("token", token, {
+      httpOnly: true,
+      secure: false,  // на продакшн ставити true
+      sameSite: "lax",
+      maxAge: 20 * 60 * 1000
+    });
+
+    res.cookie("sessionId", session._id.toString(), {
       httpOnly: true,
       secure: false,
       sameSite: "lax",
       maxAge: 20 * 60 * 1000
     });
 
-      res.json({
-        token,
-        
-      });
-    } catch (err) {
-      console.log(err);
-      return res.status(500).json({ message: "authorization failed" });
-    } 
+    const { passwordHash, ...userData } = user._doc;
+
+    res.json({ user: userData });
+  } catch (err) {
+    console.log(err);
+    res.status(500).json({ message: "authorization failed" });
+  }
 }
 
 export const Cashout = async (req, res) => {
@@ -138,73 +147,80 @@ export const Cashout = async (req, res) => {
   }
 };
 
-
 export const Spin = async (req, res) => {
   try {
     const token = req.cookies.token;
-    console.log('Cookies: ', req.cookies)
-    
-    if (!token) {
-      return res.status(401).json({ message: "Not authenticated" });
-    }
+    const sessionId = req.cookies.sessionId;
+
+    if (!token) return res.status(401).json({ message: "Not authenticated" });
+    if (!sessionId) return res.status(401).json({ message: "No active session" });
+
     let decoded;
     try {
       decoded = jwt.verify(token, process.env.JWT_SECRET);
-      console.log(decoded)
-
-    } catch (err) {
+    } catch {
       return res.status(401).json({ message: "Invalid token" });
     }
 
-    const userId = decoded.userId; 
-
-    const user = await userScheme.findById(userId);
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
+    const user = await userScheme.findById(decoded.userId);
+    if (!user) return res.status(404).json({ message: "User not found" });
 
     if (user.creditScore <= 0) {
       return res.status(400).json({ message: "Not enough credits" });
     }
-    let result = await spinOnce(user);
-    console.log(result)
-    
-    let win = isWin(result);
-    let payout = win ? getPayout(result[0]): 0;
 
-    const creditsBeforeSpin = user.creditScore;
+    user.creditScore -= 1;
+
+    let result = spin();
+    let win = isWin(result);
+    let reward = win ? getreward(result[0]) : 0;
+
+    const creditsBeforeSpin = user.creditScore + 1;
     if (win && creditsBeforeSpin >= 40) {
       let cheatChance = 0;
-      if (creditsBeforeSpin >= 40 && creditsBeforeSpin < 60) cheatChance = 0.3;
-      if (creditsBeforeSpin >= 60) cheatChance = 0.6;
+      if (creditsBeforeSpin < 60) cheatChance = 0.3;
+      else cheatChance = 0.6;
 
       if (Math.random() < cheatChance) {
-        result = spinOnce();
+        result = spin();
         win = isWin(result);
-        payout = win ? getPayout(result[0]) : -1;
+        reward = win ? getreward(result[0]) : -1;
       }
     }
 
-    user.creditScore += payout;
+    user.creditScore += reward;
 
-    return res.status(200).json({
+    const session = await sessionSchema.findById(sessionId);
+    if (!session) return res.status(404).json({ message: "Session not found" });
+
+    session.rounds.push({
+      roundId: uuidv4(),
+      bet: 1,
       result,
       win,
-      payout,
-      credits: user.creditScore
+      reward,
     });
 
+    session.credits = user.creditScore;
+
+    await user.save();
+    await session.save();
+
+    res.status(200).json({
+      result,
+      win,
+      reward,
+      credits: user.creditScore
+      
+    });
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    console.log(error);
+    res.status(500).json({ error: error.message });
   }
 };
 
-const SYMBOLS = ['C', 'L', 'O', 'W'];
-const PAYOUTS = { C: 10, L: 20, O: 30, W: 40 };
 
-async function spinOnce(user) {
-  user.creditScore -= 1;
-  await user.save();
+function spin() {
   return [
     SYMBOLS[Math.floor(Math.random() * SYMBOLS.length)],
     SYMBOLS[Math.floor(Math.random() * SYMBOLS.length)],
@@ -216,6 +232,21 @@ function isWin(result) {
   return result[0] === result[1] && result[1] === result[2];
 }
 
-function getPayout(symbol) {
-  return PAYOUTS[symbol] || 0;
+function getreward(symbol) {
+  return rewardS[symbol] || 0;
 }
+
+export const authMe = async (req, res) => {
+  try {
+    const token = req.cookies.token;
+    if (!token) return res.status(401).json({ message: "Not authorized" });
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const user = await userScheme.findById(decoded.userId).select("-passwordHash");
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    res.json({ user });
+  } catch {
+    res.status(401).json({ message: "Invalid token" });
+  }
+};

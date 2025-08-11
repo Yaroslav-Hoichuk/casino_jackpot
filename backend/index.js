@@ -1,6 +1,6 @@
 import express from "express"; 
 import { registerValidation } from "./validators/auth_validation.js"
-import { Cashout, getUserById, getUsers, Spin, userLogin, userRegistration } from "./controllers/user_controller.js";
+import { authMe, Cashout, getUserById, getUsers, Spin, userLogin, userRegistration } from "./controllers/user_controller.js";
 import { getAllSessions, createSession, deleteSessionById, deleteAllUserSessions} from "./controllers/session_controller.js";
 import dotenv from 'dotenv';
 import { dbConnection } from "./connections/dbConnection.js";
@@ -21,14 +21,16 @@ app.use(express.json());
 
 app.get("/api/users/", getUsers);
 app.get("/api/users/:id", getUserById)
-app.get("/", getAllSessions);
+app.get("/api/sessions", getAllSessions);
+app.get("/api/auth/me", authMe)
 
 app.post("/api/auth/registration", registerValidation, userRegistration)
 app.post("/api/auth/login", userLogin)
 app.post("/api/users/:id/spin", Spin)
 app.post("/api/sessions/new/", createSession);
 
-app.put("/api/users/:id/cashout", Cashout)
+app.put("/api/users/:id/cashout", Cashout);
+
 app.delete("/api/sessions/user/", deleteSessionById);
 app.delete("/api/sessions/user/:id", deleteAllUserSessions);
 
