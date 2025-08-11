@@ -1,8 +1,11 @@
 import { useState, useEffect } from "react";
-import AuthForm from "./AuthForm.jsx";
-import Game from "./Game.jsx";
-
-const SYMBOLS = ['C', 'L', 'O', 'W'];
+import AuthForm from "./components/AuthForm.jsx";
+import Game from "./components/Game.jsx";
+import { checkScore } from "./utils/checkScore.js";
+import { spinAmination } from "./utils/spinAnitamation.js";
+import { checkAuth } from "./hooks/checkAuth.js";
+import { cashout } from "./utils/cashout.js";
+import axios from "axios";
 
 function App() {
   const [user, setUser] = useState(null);
@@ -13,32 +16,11 @@ function App() {
   const [symbols, setSymbols] = useState(['X', 'X', 'X']);
   const [spinning, setSpinning] = useState(false);
   const [score, setScore] = useState();
-  const [loadingUser,setLoadingUser] = useState(true)
 
   useEffect(() => {
-  const checkauth = async () => {
-    try {
-      const res = await fetch("http://localhost:8989/api/auth/me", {
-        credentials: "include"
-      });
-
-      if (!res.ok) {
-        setUser(null);
-        console.log("юз не логінився");
-      } else {
-        const data = await res.json();
-        setUser(data.user);
-        setScore(data.user.creditScore);
-      }
-    } catch (error) {
-      setUser(null);
-    } finally {
-      setLoadingUser(false);
-    }
-  };
-
-  checkauth(); 
-}, []);
+    checkAuth(setUser, setScore);
+  
+  }, []);
 
   const handleAuth = async (e) => {
     e.preventDefault();
@@ -51,98 +33,32 @@ function App() {
       : { email, password: passwordHash };
 
     try {
-      const res = await fetch(url, {
-        method: 'POST',
+      const res = await axios.post(url, body, {
+        withCredentials: true,
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify(body),
       });
-      if (!res.ok) throw new Error(isLogin ? 'Login failed' : 'Registration failed');
-      const data = await res.json();
+
+      if (res.status !== 200) {
+        throw new Error(isLogin ? 'Login failed' : 'Registration failed');
+      }
+
+      const data = res.data;
+
       setUser(data.user);
       setScore(data.user.creditScore);
     } catch (err) {
-      alert(err.message);
+      alert(err.message || 'Error during authentication');
     } finally {
       setLoading(false);
     }
-  };
-
-const spin = async () => {
-  if (score <= 0) {
-    alert("Not enough credits");
-    return;
-  }
-
-  setSpinning(true);
-
-  // 1. Запускаємо анімацію випадкових символів
-  let intervals = [];
-  for (let i = 0; i < 3; i++) {
-    intervals[i] = setInterval(() => {
-      setSymbols(prev => {
-        const updated = [...prev];
-        updated[i] = SYMBOLS[Math.floor(Math.random() * SYMBOLS.length)];
-        return updated;
-      });
-    }, 100);
-  }
-
-  // 2. Паралельно запитуємо результат з сервера
-  const response = await fetch('http://localhost:8989/api/users/:id/spin', {
-    method: 'POST',
-    credentials: 'include',
-  });
-  const result = await response.json();
-  // 3. Поступово зупиняємо барабани та вставляємо фінальний результат
-  setTimeout(() => {
-    clearInterval(intervals[0]);
-    setSymbols(prev => {
-      const updated = [...prev];
-      updated[0] = result.result[0];
-      return updated;
-    });
-  }, 1000);
-
-  setTimeout(() => {
-    clearInterval(intervals[1]);
-    setSymbols(prev => {
-      const updated = [...prev];
-      updated[1] = result.result[1];
-      return updated;
-    });
-  }, 2000);
-
-  setTimeout(() => {
-    clearInterval(intervals[2]);
-    setSymbols(prev => {
-      const updated = [...prev];
-      updated[2] = result.result[2];
-      return updated;
-    });
-    setSpinning(false);
-    setScore(result.credits); // оновлюємо кредити
-  }, 3000);
 };
 
-
-  const cashout = async () => {
-    try {
-      const res = await fetch(`http://localhost:8989/api/users/${user._id}/cashout`, {
-        method: 'PUT',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-      });
-      if (!res.ok) throw new Error('Cashout failed');
-      const data = await res.json();
-      alert(`You cashed out with ${data.score} credits!`);
-      setScore(0);
-      setSymbols(['X', 'X', 'X']);
-    } catch (err) {
-      alert(err.message);
-    }
-  };
-
+const spin = async () => {
+  
+  checkScore(score);
+  spinAmination(setSymbols, setScore,setSpinning);
+  
+};
   if (!user) {
     return (
       <AuthForm
@@ -160,7 +76,6 @@ const spin = async () => {
 
   return (
     <Game
-      email={email}
       credits={score}
       symbols={symbols}
       spin={spin}
