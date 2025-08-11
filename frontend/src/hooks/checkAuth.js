@@ -8,12 +8,13 @@ export const checkAuth = async (setUser,setScore) => {
         }
       );
 
-      if (!res.data.ok) {
-        setUser(null);
-      } else {
-        setUser(res.data.user);
-        setScore(res.data.user.creditScore);
-      }
+    if (res.data?.user) {
+      setUser(res.data.user);
+      setScore(res.data.user.creditScore);
+    } else {
+      setUser(null);
+}
+
     } catch (error) {
       setUser(null);
       console.log(error);

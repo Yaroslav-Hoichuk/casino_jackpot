@@ -1,19 +1,23 @@
-export const cashout = async () => {
-    try {
-      const res = await axios.put(`http://localhost:8989/api/users/${user._id}/cashout`, 
-        {},{
-          withCredentials: true,
-          headers: { 'Content-Type': 'application/json' },
-        }
-      );
-      if (!res.ok) throw new Error('Cashout failed');
+import axios from "axios";
 
-      alert(`You cashed out all credits!`);
+export const cashout = async (user, setScore, setSymbols) => {
+  try {
+    const res = await axios.put(
+      `http://localhost:8989/api/users/${user._id}/cashout`,
+      {},
+      {
+        withCredentials: true,
+        headers: { "Content-Type": "application/json" },
+      }
+    );
 
-      setScore(0);
-      setSymbols(['X', 'X', 'X']);
+    if (res.status !== 200) throw new Error("Cashout failed");
 
-    } catch (err) {
-        console.log(err);
-    }
-  };
+    alert(`You cashed out all credits!`);
+    setScore(0);
+    setSymbols(["X", "X", "X"]);
+
+  } catch (err) {
+    console.error(err);
+  }
+};
