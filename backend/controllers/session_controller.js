@@ -23,21 +23,15 @@ export const createSession = async (req, res) => {
         if (!user) return res.status(404).json({ message: "User not found" });
     
      const session = await sessionSchema.create({
-      sessionId: uuidv4(),        // генеруємо унікальний ID
+      sessionId: uuidv4(),
       userId: user._id,
       credits: user.creditScore,
       rounds: [],
     });
 
-    res.cookie("sessionId", session.sessionId, {
-      httpOnly: true,
-      secure: false,
-      sameSite: "lax",
-      maxAge: 20 * 60 * 1000
-    });
+    createCookie("sessionId", session.sessionId)
 
-      console.log(session)
-      res.json({ session });
+    res.json({ session });
     } catch (err) {
       console.log(err)
       res.status(401).json({ message: "Not authorized" });
