@@ -80,7 +80,7 @@ const spin = async () => {
       symbols={symbols}
       spin={spin}
       spinning={spinning}
-      cashout={cashout}
+      cashout={() => cashout(user, setScore, setSymbols)}
     />
   );
 }
