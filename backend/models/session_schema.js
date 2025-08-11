@@ -2,11 +2,6 @@ import mongoose from "mongoose";
 
 const sessionSchema = new mongoose.Schema(
   {
-    sessionId: {
-      type: String,
-      required: true,
-      unique: true
-    },
     userId: {
       type: String,
       required: true
@@ -18,7 +13,7 @@ const sessionSchema = new mongoose.Schema(
     rounds: [
       {
         roundId: {
-          type: Number,
+          type: String,
           required: true
         },
         bet: {
@@ -35,10 +30,6 @@ const sessionSchema = new mongoose.Schema(
         },
         reward: {
           type: Number,
-          required: true
-        },
-        rerolled: {
-          type: Boolean,
           required: true
         }
       }
