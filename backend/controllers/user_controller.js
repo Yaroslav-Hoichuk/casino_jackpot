@@ -4,10 +4,8 @@ import { validationResult } from "express-validator";
 import jwt from "jsonwebtoken"
 import bcrypt from "bcrypt"
 import { v4 as uuidv4 } from 'uuid';
-
-
-const SYMBOLS = ['C', 'L', 'O', 'W'];
-const rewardS = { C: 10, L: 20, O: 30, W: 40 };
+import { SYMBOLS, rewardS } from "../constants/symbols.js";
+import { createCookie } from "../utils/createCookie.js";
 
 export const getUsers = async (req,res)=>{
   try {
@@ -37,7 +35,7 @@ export const getUserById = async (req,res)=>{
 }
 
 export const userRegistration = async (req, res) => {
-       try { 
+    try { 
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
         console.log(errors)
@@ -97,28 +95,15 @@ export const userLogin = async (req, res) => {
       { expiresIn: '1h' }
     );
 
-    // Створюємо сесію
     const session = await sessionSchema.create({
       userId: user._id,
       credits: user.creditScore,
       rounds: [],
     });
 
-    // Встановлюємо куки: токен і sessionId
-    res.cookie("token", token, {
-      httpOnly: true,
-      secure: false,  // на продакшн ставити true
-      sameSite: "lax",
-      maxAge: 20 * 60 * 1000
-    });
-
-    res.cookie("sessionId", session._id.toString(), {
-      httpOnly: true,
-      secure: false,
-      sameSite: "lax",
-      maxAge: 20 * 60 * 1000
-    });
-
+    createCookie(res,"token", token)
+    createCookie(res,"sessionId", session._id.toString())
+    
     const { passwordHash, ...userData } = user._doc;
 
     res.json({ user: userData });
